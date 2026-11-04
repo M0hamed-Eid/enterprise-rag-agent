@@ -1,0 +1,31 @@
+[project]
+name = "enterprise-rag-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Mohammed Eid Abdelmeguid Ibrahim", email = "mohammedeidabdelmeguid@gmail.com" }
+]
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "google-search-results>=2.4.2",
+    "langchain-chroma>=1.1.0",
+    "langchain-classic>=1.0.8",
+    "langchain-community>=0.4.2",
+    "langchain-experimental>=0.4.2",
+    "langchain-openai>=1.7.3",
+    "sqlalchemy>=2.1.8",
+    "sqlglot>=30.29.0",
+]
+
+[project.scripts]
+enterprise-rag-agent = "enterprise_rag_agent:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
