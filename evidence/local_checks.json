@@ -1,0 +1,8 @@
+{
+  "mutation_rejected": true,
+  "employee_table_rejected": true,
+  "multiple_rejected": true,
+  "row_cap_enforced": true,
+  "database_connection_rejects_writes": true,
+  "buffer_exposes_last_five_pairs": true
+}

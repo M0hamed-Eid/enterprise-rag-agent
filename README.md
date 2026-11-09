@@ -14,8 +14,7 @@ OpenAI-compatible gateway.
 
 The assignment's architecture and configuration-stub deliverables are present.
 SQL grounding, a follow-up calculation, semantic recall, buffer fallback, and
-read-only SQL protections were verified. Wiki ingestion and live news remain
-unverified; this is not a production-complete system.
+read-only SQL protections were verified. The explicit evaluation mode now indexes a synthetic wiki and records real model/tool evidence. See evidence/RUN_EVIDENCE.md for news status and scope; this is not a production-complete system.
 
 ## Setup
 
@@ -127,8 +126,23 @@ uv run python src/agent_config_stub.py --help
 ## Limits
 
 Wiki retrieval needs approved documents indexed into its authorized collection;
-no wiki-ingestion command is implemented. News is configured but not verified.
+normal chat does not ingest documents. --evaluate ingests only the synthetic test wiki. The actual news result is documented in evidence/RUN_EVIDENCE.md.
 Changing embedding models may require re-indexing into a new vector directory.
 Legacy-component deprecation warnings are expected for this assignment.
 Production authentication, outbound-data filtering, retention, and strict token
 budget enforcement are outside this stub.
+
+
+## Resubmission: actual execution evidence
+
+```bash
+uv run python src/agent_config_stub.py --evaluate
+```
+
+The script loads the local `.env`; do not replace an existing key file.
+The recorded four-turn run and limitations are in
+[evidence/RUN_EVIDENCE.md](evidence/RUN_EVIDENCE.md).
+Upload **submission.zip**: the requested architecture/report/script/schema, the
+synthetic wiki needed for reproduction, and the execution evidence. The environment,
+secrets, database binaries and generated vectors are excluded. Standalone setup
+instructions for the minimal archive are included in RUN_EVIDENCE.md.

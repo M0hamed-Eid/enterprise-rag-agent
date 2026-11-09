@@ -1,8 +1,8 @@
 # Enterprise RAG Agent: Memory Strategy Evaluation
 
 **Stakeholder:** Priya Sharma, Lead AI Engineer  
-**Date:** 2026-11-04  
-**Status:** Architecture proposal and configuration stub
+**Date:** 2026-11-09
+**Status:** Configuration stub with recorded real-model execution
 
 ## 1. Executive Summary
 
@@ -98,7 +98,7 @@ deployment adds network latency. Memory writes can also add embedding and
 storage latency after a response is generated.
 
 The stub uses synchronous memory operations, so these costs affect end-to-end
-request time. No measured millisecond claims are made.
+request time. The four-turn real evaluation is recorded in section 9. Its observed timings do not establish a benchmark or isolate memory latency.
 
 Evaluate p50 and p95 latency separately for:
 
@@ -210,8 +210,7 @@ A separate ingestion process must:
 
 The tool returns a grounded answer and document source identifiers.
 
-No fabricated policy document is inserted by the configuration script.
-An empty collection produces no supporting wiki evidence.
+Normal chat does not insert demonstration policy. The explicit --evaluate mode indexes data/demo_wiki.md, a clearly labelled synthetic test policy, in a fresh isolated evaluation collection. It must not be treated as actual HR guidance. An empty collection in normal chat produces no supporting wiki evidence.
 
 ### SERP API
 
@@ -314,3 +313,29 @@ freshness checks, token-budget enforcement, and evaluation.
 
 The submitted Python is a configuration stub, not a production-complete or
 benchmark-validated system.
+
+## 9. Recorded real-model evaluation — 9 November 2026
+
+See [run evidence](../evidence/RUN_EVIDENCE.md),
+[actual console output](../evidence/console_output.txt), and
+[provider/tool event record](../evidence/live_run.json).
+The agent used the Sprints gateway with response model identifier
+`gemini/gemini-3.8-flash`; this is real remote inference, not an offline check.
+Embeddings and direct semantic recall also succeeded.
+
+The fresh four-turn conversation grounded SQL values (980000 and 1100000), resolved
+a follow-up using the recent buffer and re-queried SQL for 12.2449% growth, then
+retrieved a cited synthetic HR policy. Live SerpAPI returned articles with URLs; these are search snippets, not full-article verification.
+
+| Turn | Tools | Duration | Model responses | Recorded chat tokens |
+| --- | --- | --- | --- | --- |
+| 1 | EnterpriseSQLDB | 17.94s | 3 | 2503 |
+| 2 | EnterpriseSQLDB | 18.47s | 3 | 3634 |
+| 3 | HR_Ops_Wiki | 10.74s | 3 | 2542 |
+| 4 | LiveMarketNews | 13.65s | 2 | 4106 |
+
+These are actual end-to-end observations for this run, not memory-only measurements.
+The token arithmetic in sections 3–4 remains illustrative. No controlled comparison
+of buffer-only, semantic-only and hybrid modes, eviction recall or international
+latency benchmark was performed. Separate local checks verified k=5 eviction,
+SQL mutation rejection, table allowlisting and the read-only SQLite connection.

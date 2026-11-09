@@ -16,3 +16,6 @@ __pycache__/
 # Local generated vector database files
 .chroma/
 runtime_vectors/
+# Isolated evaluation vectors and local upload archive
+.runtime/
+submission.zip

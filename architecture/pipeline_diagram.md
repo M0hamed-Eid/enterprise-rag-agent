@@ -116,3 +116,10 @@ The configuration stub demonstrates memory, routing, retrieval, and read-only
 SQL execution. Production authentication, document ingestion, strict token
 budget enforcement, distributed storage, and retention enforcement remain
 separate implementation work.
+
+## Recorded demonstration
+
+The --evaluate mode indexes a clearly labelled synthetic wiki into a fresh scoped
+vector directory, then records SQL, follow-up, wiki and news-tool execution.
+See [real-run evidence](../evidence/RUN_EVIDENCE.md) for actual results and limitations.
+Normal deployment still requires approved wiki ingestion and authorization.

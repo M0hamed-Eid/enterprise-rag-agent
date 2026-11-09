@@ -39,6 +39,10 @@ import logging
 import os
 import re
 import sqlite3
+import time
+import platform
+from importlib.metadata import version
+from dotenv import load_dotenv
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,6 +55,7 @@ from sqlalchemy import create_engine
 from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.utilities import SQLDatabase, SerpAPIWrapper
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.tools import Tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
@@ -451,6 +456,8 @@ def build_nexus_executive_agent(
         base_url=required_env("OPENAI_BASE_URL"),
         model=required_env("OPENAI_CHAT_MODEL", "LLM_MODEL", "MODEL_NAME"),
         temperature=0,
+        # Non-streaming preserves gateway usage metadata for auditable tool calls.
+        disable_streaming=True,
         timeout=45,
         max_retries=1,
     )
@@ -502,7 +509,7 @@ def build_nexus_executive_agent(
         MessagesPlaceholder("agent_scratchpad"),
     ])
     agent = create_tool_calling_agent(llm, tools, prompt)
-    return AgentExecutor(
+    executor = AgentExecutor(
         agent=agent,
         tools=tools,
         memory=memory,
@@ -511,15 +518,140 @@ def build_nexus_executive_agent(
         max_execution_time=90,
         verbose=False,
     )
+    object.__setattr__(executor, "_demo_wiki_store", wiki_store)
+    return executor
 
+
+class RunEvidence(BaseCallbackHandler):
+    """Capture observable API responses/tool events, never credentials or private reasoning."""
+
+    def __init__(self) -> None:
+        self.events: list[dict[str, Any]] = []
+
+    def on_llm_end(self, response: Any, **kwargs: Any) -> None:
+        for generations in response.generations:
+            for generation in generations:
+                message = getattr(generation, "message", None)
+                if message is not None:
+                    self.events.append({
+                        "event": "model_response",
+                        "content": message.content,
+                        "tool_calls": getattr(message, "tool_calls", []),
+                        "response_metadata": message.response_metadata,
+                        "usage_metadata": message.usage_metadata,
+                    })
+
+    def on_tool_start(self, serialized: dict[str, Any], input_str: str, **kwargs: Any) -> None:
+        self.events.append({"event": "tool_start", "tool": serialized.get("name"),
+                            "input": input_str})
+
+    def on_tool_end(self, output: Any, **kwargs: Any) -> None:
+        self.events.append({"event": "tool_observation", "output": str(output)})
+
+
+def ingest_demo_wiki(agent: AgentExecutor, document_path: Path) -> None:
+    """Index a clearly labelled synthetic policy for a reproducible retrieval test.
+
+    Real deployment must replace this demonstration corpus with approved wiki data.
+    The vector collection is already scoped by trusted demo identifiers.
+    """
+    # Prefer an explicit attached store, rather than depending on closure internals.
+    store = agent._demo_wiki_store
+    store.add_texts([document_path.read_text()], metadatas=[{
+        "source": "synthetic-demo-hybrid-work.md", "document_id": "DEMO-HR-001",
+        "effective_date": "2026-11-09", "synthetic": True,
+    }], ids=["demo-hr-001"])
+
+
+def evaluate_live(agent: AgentExecutor, output_directory: Path) -> None:
+    """Evaluate real agent/tool/model calls. Expected values are checks, not answers."""
+    recorder = RunEvidence()
+    questions = [
+        "What are EMEA's Q1 and Q2 revenue values? Query the database.",
+        "What is the percentage increase between those two values? Verify using SQL.",
+        "According to the indexed synthetic demo HR policy, how many remote-work days are allowed per week, and which source supports it?",
+        "Find recent public news about global oil markets using LiveMarketNews and cite available source URLs. Do not include internal business data in your search.",
+    ]
+    turns = []
+    for index, question in enumerate(questions, 1):
+        begin = len(recorder.events)
+        start = time.perf_counter()
+        result = agent.invoke({"input": question}, config={"callbacks": [recorder]})
+        steps = [{"tool": action.tool, "input": action.tool_input,
+                  "observation": observation} for action, observation in result["intermediate_steps"]]
+        events = recorder.events[begin:]
+        if not any(event["event"] == "model_response" and event.get("usage_metadata") for event in events):
+            raise AssertionError("Real provider response metadata/token usage missing")
+        turn = {"turn": index, "question": question, "answer": result["output"],
+                "duration_seconds": time.perf_counter()-start, "tool_steps": steps,
+                "events": events}
+        turns.append(turn)
+        print(f"\nTURN {index}: {question}", flush=True)
+        for step in steps:
+            print("TOOL:", step["tool"], "INPUT:", step["input"], flush=True)
+            print("OBSERVATION:", step["observation"], flush=True)
+        print("ANSWER:", result["output"], flush=True)
+        # Persist each completed turn so a later failure cannot erase real evidence.
+        output_directory.mkdir(parents=True, exist_ok=True)
+        (output_directory / "partial_turns.json").write_text(json.dumps(turns, indent=2, default=str)+"\n")
+    sql_first = next(step for step in turns[0]["tool_steps"] if step["tool"] == "EnterpriseSQLDB")
+    sql_second = next(step for step in turns[1]["tool_steps"] if step["tool"] == "EnterpriseSQLDB")
+    wiki_step = next(step for step in turns[2]["tool_steps"] if step["tool"] == "HR_Ops_Wiki")
+    first = json.loads(sql_first["observation"])
+    second = json.loads(sql_second["observation"])
+    assert first["source"] == second["source"] == "enterprise_sql"
+    assert "980000" in str(first["rows"]) and "1100000" in str(first["rows"])
+    numeric = [float(value) for row in second["rows"] for value in row.values() if isinstance(value,(float,int))]
+    expected_growth = (1100000-980000)/980000*100
+    assert any(abs(value-expected_growth)<0.01 for value in numeric), "SQL growth differs from seed data"
+    wiki_result = json.loads(wiki_step["observation"])
+    assert any(source["document_id"] == "DEMO-HR-001" for source in wiki_result["sources"])
+    assert re.search(r"\b(?:2|two)\b", turns[2]["answer"], re.I), "Demo wiki answer mismatch"
+    semantic = agent.memory.memories[1]
+    recalled = semantic.retriever.invoke("EMEA Q1 Q2 revenue")  # Bypass resilient fallback.
+    assert recalled and any("EMEA" in doc.page_content for doc in recalled)
+    recent = agent.memory.memories[0].load_memory_variables({"input": "follow-up"})["chat_history"]
+    assert questions[0] in recent and questions[1] in recent
+    news_steps = [step for step in turns[3]["tool_steps"] if step["tool"] == "LiveMarketNews"]
+    assert news_steps, "Agent did not attempt the news tool"
+    try:
+        news = json.loads(news_steps[-1]["observation"])
+        live_news = bool(news.get("articles"))
+    except (ValueError, TypeError):
+        live_news = False
+    checks = {"real_model_responses_all_turns": True, "sql_seed_values_match": True,
+              "sql_followup_growth_matches": True, "wiki_source_and_answer_match": True,
+              "semantic_recall_succeeded_without_fallback": True,
+              "recent_buffer_retains_followup_context": True,
+              "news_tool_invoked": True, "live_news_returned_articles": live_news}
+    evidence = {"completed_at_utc": datetime.now(timezone.utc).isoformat(),
+                "python": platform.python_version(),
+                "packages": {name: version(name) for name in
+                             ("langchain-classic", "langchain-openai", "langchain-chroma", "sqlglot")},
+                "source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                "synthetic_data_notice": "SQL assignment seed data and explicitly synthetic demo HR document",
+                "checks": checks, "semantic_recalled_documents": [doc.page_content for doc in recalled],
+                "turns": turns}
+    (output_directory / "live_run.json").write_text(json.dumps(evidence, indent=2, default=str)+"\n")
+    (output_directory / "partial_turns.json").unlink()
+    print("\nCHECKS:", json.dumps(checks,indent=2), flush=True)
+    if not live_news:
+        print("LIMITATION: SERP returned no verified articles; no live-news success is claimed.", flush=True)
+    print("PASS: real-model agent execution, SQL follow-up, cited wiki and semantic memory.",flush=True)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the local enterprise RAG demo")
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     parser.add_argument("--smoke-test", action="store_true")
+    parser.add_argument("--evaluate", action="store_true", help="Record real agent execution evidence")
+    parser.add_argument("--output-dir", type=Path, default=Path("evidence"))
     parser.add_argument("--question", help="Ask one question instead of opening chat")
     parser.add_argument("--session-id", help="Explicitly resume a previous local demo session")
     args = parser.parse_args()
 
+    if args.evaluate:
+        # Evaluation collections never mix with existing production/demo vectors.
+        os.environ["VECTOR_ROOT"] = str(Path(".runtime") / ("evaluation-" + uuid.uuid4().hex))
     # Demo identifiers only. A hosted service must obtain these from auth.
     agent = build_nexus_executive_agent(
         tenant_id="nexus-demo",
@@ -530,6 +662,10 @@ def main() -> None:
         ),
         wiki_access_scope="executive-demo",
     )
+    if args.evaluate:
+        ingest_demo_wiki(agent, Path(__file__).resolve().parents[1] / "data/demo_wiki.md")
+        evaluate_live(agent, args.output_dir)
+        return
     if args.smoke_test:
         questions = [
             "What are EMEA's Q1 and Q2 revenue values?",

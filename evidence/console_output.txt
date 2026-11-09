@@ -1,0 +1,66 @@
+/Users/mac/Documents/My_GitHub/enterprise-rag-agent/src/agent_config_stub.py:57: DeprecationWarning: `langchain-community` is being sunset and is no longer actively maintained. See https://github.com/langchain-ai/langchain-community/issues/674 for details and migration guidance toward standalone integration packages.
+  from langchain_community.utilities import SQLDatabase, SerpAPIWrapper
+/Users/mac/Documents/My_GitHub/enterprise-rag-agent/src/agent_config_stub.py:68: DeprecationWarning: `langchain-experimental` is being sunset and is no longer actively maintained. See https://github.com/langchain-ai/langchain-experimental/issues/87 for details.
+  from langchain_experimental.sql import SQLDatabaseChain
+/Users/mac/Documents/My_GitHub/enterprise-rag-agent/src/agent_config_stub.py:176: LangChainDeprecationWarning: The class `ConversationBufferWindowMemory` was deprecated in LangChain 0.3.1 and will be removed in 2.0.0. Use `langchain.agents.create_agent` instead. For agents that need to remember prior interactions, use `create_agent` with checkpointing or the `Store` API. See https://docs.langchain.com/oss/python/langchain/short-term-memory and https://docs.langchain.com/oss/python/langchain/long-term-memory
+  return ConversationBufferWindowMemory(
+/Users/mac/Documents/My_GitHub/enterprise-rag-agent/.venv/lib/python3.13/site-packages/pydantic/main.py:280: LangChainDeprecationWarning: The class `InMemoryChatMessageHistory` was deprecated in LangChain 1.6.4 and will be removed in 2.0.0 See the short-term memory documentation for recommended alternatives: https://docs.langchain.com/oss/python/langchain/short-term-memory
+  validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+
+TURN 1: What are EMEA's Q1 and Q2 revenue values? Query the database.
+TOOL: EnterpriseSQLDB INPUT: What are the Q1 and Q2 sales figures for the EMEA region?
+OBSERVATION: {"source": "enterprise_sql", "sql": "SELECT \"region\", \"q1_revenue\", \"q2_revenue\" FROM \"regional_sales\" WHERE \"region\" = 'EMEA' LIMIT 20", "rows": [{"region": "EMEA", "q1_revenue": 980000, "q2_revenue": 1100000}], "row_limit": 20}
+ANSWER: According to the enterprise database (`enterprise_sql`):
+
+* **Q1 Revenue:** 980,000
+* **Q2 Revenue:** 1,100,000
+
+*(Note: The database does not record a reporting year or sales currency for these regional sales figures.)*
+
+TURN 2: What is the percentage increase between those two values? Verify using SQL.
+TOOL: EnterpriseSQLDB INPUT: What is the percentage increase from EMEA Q1 revenue to EMEA Q2 revenue?
+OBSERVATION: {"source": "enterprise_sql", "sql": "SELECT ((\"q2_revenue\" - \"q1_revenue\") * 100.0 / \"q1_revenue\") AS \"percentage_increase\" FROM \"regional_sales\" WHERE \"region\" = 'EMEA' LIMIT 20", "rows": [{"percentage_increase": 12.244897959183673}], "row_limit": 20}
+ANSWER: According to the enterprise database (`enterprise_sql`), the percentage increase from EMEA's Q1 revenue (980,000) to Q2 revenue (1,100,000) is approximately **12.24%** (or **12.2449%**).
+
+*(Note: The database does not record a reporting year or sales currency for these figures.)*
+
+TURN 3: According to the indexed synthetic demo HR policy, how many remote-work days are allowed per week, and which source supports it?
+TOOL: HR_Ops_Wiki INPUT: remote-work days allowed per week synthetic demo HR policy
+OBSERVATION: {"answer": "Based on the provided policy, eligible staff may work remotely up to two (2) days per week with manager approval.", "sources": [{"source": "synthetic-demo-hybrid-work.md", "document_id": "DEMO-HR-001", "effective_date": "2026-11-09"}]}
+ANSWER: According to the synthetic demo hybrid work policy, eligible staff are permitted to work remotely up to **two (2) days per week** (subject to manager approval).
+
+* **Source Document ID:** `DEMO-HR-001` (`synthetic-demo-hybrid-work.md`)
+* **Effective Date:** November 9, 2026
+
+TURN 4: Find recent public news about global oil markets using LiveMarketNews and cite available source URLs. Do not include internal business data in your search.
+TOOL: LiveMarketNews INPUT: global oil markets
+OBSERVATION: {"retrieved_at_utc": "2026-11-09T14:38:00.139992+00:00", "articles": [{"title": "The Global Oil Glut Returns as High Prices Crush Demand", "snippet": "The global crude oil market is moving back towards oversupply, according to analysts from Goldman Sachs and JPMorgan, with demand...", "url": "https://oilprice.com/Latest-Energy-News/World-News/The-Global-Oil-Glut-Returns-as-High-Prices-Crush-Demand.html", "publication_date": "3 days ago", "source": "Crude Oil Prices Today | OilPrice.com"}, {"title": "Current price of oil as of November 5, 2026", "snippet": "When oil prices change, it affects your energy costs\u2014and even the price of everyday items. Here's why.", "url": "https://fortune.com/article/price-of-oil-11-05-2026/", "publication_date": "4 days ago", "source": "Fortune"}, {"title": "Global Oil Price Drops Below $100 a Barrel", "snippet": "Global Oil Price Drops Below $100 a Barrel. Investors anticipated that a damaged Saudi Arabian pipeline may be close to reopening, allowing more...", "url": "https://www.nytimes.com/2026/09/22/business/saudi-oil-pipeline-hormuz.html", "publication_date": "1 month ago", "source": "The New York Times"}, {"title": "Global Oil Market Shifts Towards Oversupply as Demand Fears Fade", "snippet": "Analysts from Goldman Sachs and JPMorgan predict the global crude oil market is returning to oversupply, with a surplus of 1.1 to 1.", "url": "https://ng.headtopics.com/news/global-oil-market-shifts-towards-oversupply-as-demand-fears-89644407", "publication_date": "1 day ago", "source": "Head Topics"}, {"title": "Why fuel prices may go higher still", "snippet": "Seven months into the US conflict with Iran, with no clear end in sight, the global oil market has now largely exhausted the safety measures...", "url": "https://theconversation.com/why-fuel-prices-may-go-higher-still-292853", "publication_date": "1 month ago", "source": "The Conversation"}]}
+ANSWER: Recent public news regarding global oil markets highlights several key developments:
+
+1. **Shift Toward Oversupply and Demand Pressures**
+   * **Summary:** Analysts from Goldman Sachs and JPMorgan report that the global crude oil market is moving back toward an oversupply condition, projecting a surplus as elevated prices dampen demand.
+   * **Sources:**
+     * *The Global Oil Glut Returns as High Prices Crush Demand* (OilPrice.com) – [https://oilprice.com/Latest-Energy-News/World-News/The-Global-Oil-Glut-Returns-as-High-Prices-Crush-Demand.html](https://oilprice.com/Latest-Energy-News/World-News/The-Global-Oil-Glut-Returns-as-High-Prices-Crush-Demand.html)
+     * *Global Oil Market Shifts Towards Oversupply as Demand Fears Fade* (Head Topics) – [https://ng.headtopics.com/news/global-oil-market-shifts-towards-oversupply-as-demand-fears-89644407](https://ng.headtopics.com/news/global-oil-market-shifts-towards-oversupply-as-demand-fears-89644407)
+
+2. **Impact on Energy and Consumer Costs**
+   * **Summary:** Recent reporting covers oil price movements as of early November 2026 and their broader economic impact on consumer energy costs and retail items.
+   * **Source:** *Current price of oil as of November 5, 2026* (Fortune) – [https://fortune.com/article/price-of-oil-11-05-2026/](https://fortune.com/article/price-of-oil-11-05-2026/)
+
+3. **Infrastructure and Geopolitical Factors**
+   * **Summary:** Earlier market movements saw oil prices drop below $100 per barrel amid expectations that a damaged Saudi Arabian pipeline would reopen, even as geopolitical tensions in the region continue to influence supply safety margins.
+   * **Sources:**
+     * *Global Oil Price Drops Below $100 a Barrel* (The New York Times) – [https://www.nytimes.com/2026/09/22/business/saudi-oil-pipeline-hormuz.html](https://www.nytimes.com/2026/09/22/business/saudi-oil-pipeline-hormuz.html)
+     * *Why fuel prices may go higher still* (The Conversation) – [https://theconversation.com/why-fuel-prices-may-go-higher-still-292853](https://theconversation.com/why-fuel-prices-may-go-higher-still-292853)
+
+CHECKS: {
+  "real_model_responses_all_turns": true,
+  "sql_seed_values_match": true,
+  "sql_followup_growth_matches": true,
+  "wiki_source_and_answer_match": true,
+  "semantic_recall_succeeded_without_fallback": true,
+  "recent_buffer_retains_followup_context": true,
+  "news_tool_invoked": true,
+  "live_news_returned_articles": true
+}
+PASS: real-model agent execution, SQL follow-up, cited wiki and semantic memory.
